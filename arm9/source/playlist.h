@@ -27,6 +27,8 @@ extern int shufflepos;
 
 struct playlist *playlist_build_songs(void);
 int playlist_add(struct playlist *p);
+int playlist_change(int pos, struct playlist *p);
+void playlist_shuffle(struct playlist *p);
 struct playlist *playlist_process(char *path, char *filename);
 
 #endif

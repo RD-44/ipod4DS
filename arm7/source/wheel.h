@@ -1,14 +1,14 @@
-#define CENTER_X SCREEN_WIDTH/2
-#define CENTER_Y SCREEN_HEIGHT/2
+#define CENTER_X 128
+#define CENTER_Y 96
 
 #define MENU_X 0
-#define MENU_Y -60
-#define FORWARD_X 60
+#define MENU_Y -54
+#define FORWARD_X 56
 #define FORWARD_Y 0
-#define REWIND_X -60
+#define REWIND_X -56
 #define REWIND_Y 0
 #define PLAY_X 0
-#define PLAY_Y 60
+#define PLAY_Y 56
 
 #define WHEEL_RIGHT        BIT(0)
 #define WHEEL_LEFT         BIT(1)

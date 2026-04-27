@@ -1,5 +1,4 @@
 #include <nds.h>
-#include <nds/arm9/console.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -20,14 +19,14 @@ void scanwheel(void) {
 	static int down;
 	int px, py;
 	static int held;
-	uint16 buttons;
+	u16 buttons;
 
 	int distance;
 
 	touchPosition touch;
 
 	buttons = REG_KEYXY;
-	touch = touchReadXY();
+	touchReadXY(&touch);
 
 	held = ~buttons;
 

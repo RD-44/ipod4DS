@@ -11,6 +11,7 @@
 #include <ipc2.h>
 
 #include "file.h"
+#include "input.h"
 #define SOUNDC
 #include "sound.h"
 
@@ -26,33 +27,56 @@ static enum state seeking_state;
 static int seek_delay;
 static u32 seek_pos;
 
+static int sound_wait_for_arm7_state(u8 expected_state, const char *message) {
+	int frames;
+
+	for(frames = 0; frames < 180; frames++) {
+		if(IPC2->sound_state == expected_state)
+			return 1;
+		swiWaitForVBlank();
+	}
+
+	if(IPC2->messageflag < IPC2_MAX_MESSAGES) {
+		strncpy((char *)IPC2->message[IPC2->messageflag], message, sizeof(IPC2->message[0]) - 1);
+		((char *)IPC2->message[IPC2->messageflag])[sizeof(IPC2->message[0]) - 1] = '\0';
+		IPC2->messageflag++;
+	}
+
+	return 0;
+}
+
 void InterruptHandler_IPC_SYNC(void) {
 	u8 sync;
+	int copy_samples;
+	int first_part;
 
 	sync = IPC_GetSync();
 
 	if(sync == IPC2_REQUEST_WRITE_SOUND) {
-		if(buffer_samples < SOUND_MAX_SAMPLES_TRANSFER)
-			return;
+		copy_samples = MIN(buffer_samples, SOUND_MAX_SAMPLES_TRANSFER);
+		first_part = MIN(buffer_size - buffer_pos, copy_samples);
 
-		if(buffer_size - buffer_pos >= SOUND_MAX_SAMPLES_TRANSFER) {
-			memcpy(pcmL, pcmbufL + buffer_pos * sound_bps, SOUND_MAX_SAMPLES_TRANSFER * sound_bps);
-			if(sound_channels == 2)
-				memcpy(pcmR, pcmbufR + buffer_pos * sound_bps, SOUND_MAX_SAMPLES_TRANSFER * sound_bps);
-		} else {
-			memcpy(pcmL, pcmbufL + buffer_pos * sound_bps, (buffer_size - buffer_pos) * sound_bps);
-			if(sound_channels == 2)
-				memcpy(pcmR, pcmbufR + buffer_pos * sound_bps, (buffer_size - buffer_pos) * sound_bps);
+		memset(pcmL, 0, SOUND_MAX_SAMPLES_TRANSFER * sound_bps);
+		if(sound_channels == 2)
+			memset(pcmR, 0, SOUND_MAX_SAMPLES_TRANSFER * sound_bps);
 
-			memcpy(pcmL + (buffer_size - buffer_pos) * sound_bps, pcmbufL, (SOUND_MAX_SAMPLES_TRANSFER - (buffer_size - buffer_pos)) * sound_bps);
+		if(copy_samples > 0) {
+			memcpy(pcmL, pcmbufL + buffer_pos * sound_bps, first_part * sound_bps);
 			if(sound_channels == 2)
-				memcpy(pcmR + (buffer_size - buffer_pos) * sound_bps, pcmbufR, (SOUND_MAX_SAMPLES_TRANSFER - (buffer_size - buffer_pos)) * sound_bps);
+				memcpy(pcmR, pcmbufR + buffer_pos * sound_bps, first_part * sound_bps);
+
+			if(copy_samples > first_part) {
+				memcpy(pcmL + first_part * sound_bps, pcmbufL, (copy_samples - first_part) * sound_bps);
+				if(sound_channels == 2)
+					memcpy(pcmR + first_part * sound_bps, pcmbufR, (copy_samples - first_part) * sound_bps);
+			}
 		}
 
-		buffer_pos += SOUND_MAX_SAMPLES_TRANSFER;
-		buffer_pos %= buffer_size;
+		buffer_pos += copy_samples;
+		if(buffer_size > 0)
+			buffer_pos %= buffer_size;
 
-		buffer_samples -= SOUND_MAX_SAMPLES_TRANSFER;
+		buffer_samples -= copy_samples;
 		if(buffer_samples < buffer_lowest)
 			buffer_lowest = buffer_samples;
 
@@ -79,6 +103,8 @@ void sound_init(void) {
 }
 
 void sound_setup(struct media *m) {
+	int target_samples;
+
 	switch(m->format) {
 		case MAD:
 			madplay(m);
@@ -110,7 +136,29 @@ void sound_setup(struct media *m) {
 		IPC2->sound_lbuf = (void *) pcmL;
 		IPC2->sound_rbuf = (void *) pcmR;
 
+		target_samples = SOUND_MAX_SAMPLES_TRANSFER * 3;
+		while(buffer_samples < target_samples && state != ERROR && state != FINISHING) {
+			switch(format) {
+				case TREMOR:
+					tremor_update();
+					break;
+
+				case FLAC:
+					flac_update();
+					break;
+
+				case MAD:
+					madplay_update();
+					break;
+
+				default:
+					buffer_samples = target_samples;
+					break;
+			}
+		}
+
 		irqSet(IRQ_IPC_SYNC, InterruptHandler_IPC_SYNC);
+		irqEnable(IRQ_IPC_SYNC);
 		REG_IPC_SYNC = IPC_SYNC_IRQ_ENABLE;
 	}
 }
@@ -123,8 +171,12 @@ void sound_stop(void) {
 		IPC_SendSync(IPC2_REQUEST_STOP_PLAYING);
 
 	irqClear(IRQ_IPC_SYNC);
+	irqDisable(IRQ_IPC_SYNC);
 
-	while(IPC2->sound_state != IPC2_STOPPED);
+	if(!sound_wait_for_arm7_state(IPC2_STOPPED, "sound: timeout stopping arm7")) {
+		state = ERROR;
+		return;
+	}
 
 	switch(format) {
 		case MAD:
@@ -219,10 +271,16 @@ void sound_playpause(void) {
 		IPC2->sound_control = IPC2_SOUND_START;
 
 	if(state == PAUSED || state == STOPPED) {
-		while(IPC2->sound_state != IPC2_PLAYING);
+		if(!sound_wait_for_arm7_state(IPC2_PLAYING, "sound: timeout starting arm7")) {
+			state = ERROR;
+			return;
+		}
 		state = PLAYING;
 	} else if(state == PLAYING) {
-		while(IPC2->sound_state != IPC2_STOPPED);
+		if(!sound_wait_for_arm7_state(IPC2_STOPPED, "sound: timeout pausing arm7")) {
+			state = ERROR;
+			return;
+		}
 		state = PAUSED;
 	}
 }

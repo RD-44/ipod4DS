@@ -60,7 +60,12 @@ extern
 struct screen_scrolling_text screen_scrolling_text[SCREEN_MAX_SCROLLING_TEXT];
 
 void screen_update(void);
+void screen_initdisplays(void);
 void screen_mainmenu(void);
+void screen_musicmenu(void);
+void screen_playlistsmenu(void);
+void screen_settingsmenu(void);
+void screen_skinsmenu(void);
 void screen_nowplaying(void);
 void screen_nowplaying_reset(void);
 void screen_playlistmenu(struct playlist *);

@@ -1,6 +1,9 @@
 #include <fat.h>
 
 #include <sys/dir.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <nds.h>
 #include <nds/arm9/console.h>
@@ -33,14 +36,44 @@
 #define volumepospic (((SpriteEntry*)OAM)[7])
 #define progresspospic (((SpriteEntry*)OAM)[8])
 
-static uint16 *frontbuffer = (uint16 *)0x06020000,
-			 *backbuffer = (uint16 *) 0x06040000;
-static uint16 *backbuffer, *frontbuffer;
+static const char *screen_skin_roots[] = {
+	"/lmp-ng/skins",
+	"/skins",
+	NULL
+};
+
+#ifndef BG0_CR
+#define BG0_CR REG_BG0CNT
+#define BG2_CR REG_BG2CNT
+#define BG3_CR REG_BG3CNT
+#define BG2_XDX REG_BG2PA
+#define BG2_XDY REG_BG2PB
+#define BG2_YDX REG_BG2PC
+#define BG2_YDY REG_BG2PD
+#define BG2_CX REG_BG2X
+#define BG2_CY REG_BG2Y
+#define BG3_XDX REG_BG3PA
+#define BG3_XDY REG_BG3PB
+#define BG3_YDX REG_BG3PC
+#define BG3_YDY REG_BG3PD
+#define BG3_CX REG_BG3X
+#define BG3_CY REG_BG3Y
+#define SUB_BG3_CR REG_BG3CNT_SUB
+#define SUB_BG3_XDX REG_BG3PA_SUB
+#define SUB_BG3_XDY REG_BG3PB_SUB
+#define SUB_BG3_YDX REG_BG3PC_SUB
+#define SUB_BG3_YDY REG_BG3PD_SUB
+#define SUB_BG3_CX REG_BG3X_SUB
+#define SUB_BG3_CY REG_BG3Y_SUB
+#endif
+
+static u16 *frontbuffer = (u16 *)0x06020000;
+static u16 *backbuffer = (u16 *)0x06040000;
 static char *screen_menu_name;
 static u8 progress_offset;
 
 static u16 screen_width, screen_height, screen_xpos, screen_ypos;
-static uint16 *main_bg, *sub_bg;
+static u16 *main_bg, *sub_bg;
 static u16 **font;
 static u16 *batteryicon, *batteryicons, battery_xpos, battery_ypos, battery_size;
 static u16 *stateicon, *stateicons, state_xpos, state_ypos, state_size;
@@ -72,7 +105,7 @@ static void screen_reset_backbuffer(void) {
 }
 
 static void screen_switchbuffers(void) {
-	uint16 *t;
+	u16 *t;
 
 	t = backbuffer;
 	backbuffer = frontbuffer;
@@ -355,6 +388,38 @@ static void screen_initsprites(void) {
 
 }
 
+static const char *screen_find_skin_root(void) {
+	int i;
+	struct stat s;
+
+	for(i = 0; screen_skin_roots[i] != NULL; i++) {
+		if(stat(screen_skin_roots[i], &s) == 0 && S_ISDIR(s.st_mode))
+			return screen_skin_roots[i];
+	}
+
+	return NULL;
+}
+
+static int screen_build_skin_path(char *out, size_t out_size, const char *filename) {
+	int i;
+
+	if(filename[0] == '/' && stat(filename, &(struct stat){0}) == 0) {
+		strncpy(out, filename, out_size - 1);
+		out[out_size - 1] = '\0';
+		return 1;
+	}
+
+	for(i = 0; screen_skin_roots[i] != NULL; i++) {
+		struct stat s;
+
+		snprintf(out, out_size, "%s/%s", screen_skin_roots[i], filename);
+		if(stat(out, &s) == 0 && S_ISREG(s.st_mode))
+			return 1;
+	}
+
+	return 0;
+}
+
 static void screen_load_skin(char *p) {
 	skin_init(p);
 
@@ -418,8 +483,8 @@ void screen_initdisplays(void) {
 
 	/* console */
 	BG0_CR = BG_MAP_BASE(31);
-	BG_PALETTE[255] = RGB15(31,31,31);
-	consoleInitDefault((u16*)SCREEN_BASE_BLOCK(31), (u16*)CHAR_BASE_BLOCK(0), 16);
+	BG_PALETTE[255] = RGB15(0,0,0);
+	consoleInit(NULL, 0, BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
 
 	/* background */
 	BG2_CR = BG_BMP16_256x256 | BG_BMP_BASE(128 / 16) | BG_PRIORITY_1;
@@ -454,7 +519,12 @@ void screen_initdisplays(void) {
 	SUB_BG3_CX = 0;
 	SUB_BG3_CY = 0;
 
-	screen_load_skin("/lmp-ng/skins/default.zip");
+	{
+		char default_skin[512];
+
+		if(screen_build_skin_path(default_skin, sizeof(default_skin), "default.zip"))
+			screen_load_skin(default_skin);
+	}
 	screen_initsprites();
 
 	DC_FlushAll();
@@ -477,7 +547,7 @@ void screen_initdisplays(void) {
 }
 
 static void screen_update_battery(void) {
-	static uint16 battery = 0x7fff, aux = 0x7fff;
+	static u16 battery = 0x7fff, aux = 0x7fff;
 	int i, j;
 
 	u32 x, y;
@@ -737,8 +807,8 @@ void screen_skinsmenu(void);
 void screen_load_skin_callback(int pos, const char *text) {
 	char file[512];
 
-	strcpy(file, "/lmp-ng/skins/");
-	strcat(file, text);
+	if(!screen_build_skin_path(file, sizeof(file), text))
+		return;
 
 	screen_load_skin(file);
 	screen_initsprites();
@@ -780,19 +850,36 @@ void screen_skinsmenu(void) {
 
 		/* scan /lmp-ng/skins for skins */
 		{
-			DIR_ITER *d;
+			const char *skin_root;
+			DIR *d;
+			struct dirent *entry;
 			char filename[256];
+			char fullpath[512];
 			struct stat s;
 
-			d = diropen("/lmp-ng/skins");
+			skin_root = screen_find_skin_root();
+			if(skin_root == NULL)
+				return;
 
-			while(dirnext(d, filename, &s) != -1) {
-				if(strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
-					continue;
+			d = opendir(skin_root);
+			if(d != NULL) {
+				while((entry = readdir(d)) != NULL) {
+					int len;
 
-				if(S_ISREG(s.st_mode)) {
-					int len = strlen(filename);
+					strcpy(filename, entry->d_name);
 
+					if(strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+						continue;
+
+					strcpy(fullpath, skin_root);
+					if(fullpath[strlen(fullpath) - 1] != '/')
+						strcat(fullpath, "/");
+					strcat(fullpath, filename);
+
+					if(stat(fullpath, &s) == -1 || !S_ISREG(s.st_mode))
+						continue;
+
+					len = strlen(filename);
 					if(len > 3 && tolower(filename[len-1]) == 'p' && tolower(filename[len-2]) == 'i' && tolower(filename[len-3]) == 'z') {
 						screen_skins_menu[size].label = strdup(filename);
 						screen_skins_menu[size].have_submenu = 0;
@@ -800,6 +887,8 @@ void screen_skinsmenu(void) {
 						size++;
 					}
 				}
+
+				closedir(d);
 			}
 		}
 	}

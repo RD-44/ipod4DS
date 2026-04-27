@@ -20,6 +20,9 @@ struct playlist *playlist_build_songs(void) {
 	struct media *m;
 	struct playlist *p;
 
+	if(media == NULL)
+		return NULL;
+
 	p = (struct playlist *) malloc(sizeof(struct playlist));
 	p->size = p->current = 0;
 

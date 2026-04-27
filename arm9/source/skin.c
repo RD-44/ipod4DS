@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "unzip.h"
 
@@ -421,7 +422,7 @@ u16 skin_get_ypos(void) {
 }
 
 u16 *skin_get_main_bg(void) {
-	u16 *s;
+	u16 *s = NULL;
 	char *buffer;
 	unzFile uf = NULL;
 	int err = UNZ_OK;
@@ -431,9 +432,9 @@ u16 *skin_get_main_bg(void) {
 
 	uf = unzOpen(currentskin.file);
 	if(uf == NULL)
-		return;
+		return NULL;
 	if(unzLocateFile(uf, currentskin.main_bg, 0) != UNZ_OK)
-		return;
+		return NULL;
 	err = unzOpenCurrentFile(uf);
 
 	buffer = (char *) malloc(131072);
@@ -462,7 +463,7 @@ u16 *skin_get_main_bg(void) {
 }
 
 u16 *skin_get_sub_bg(void) {
-	u16 *s;
+	u16 *s = NULL;
 	char *buffer;
 	unzFile uf = NULL;
 	int err = UNZ_OK;
@@ -472,9 +473,9 @@ u16 *skin_get_sub_bg(void) {
 
 	uf = unzOpen(currentskin.file);
 	if(uf == NULL)
-		return;
+		return NULL;
 	if(unzLocateFile(uf, currentskin.sub_bg, 0) != UNZ_OK)
-		return;
+		return NULL;
 	err = unzOpenCurrentFile(uf);
 
 	buffer = (char *) malloc(131072);
@@ -638,7 +639,7 @@ void skin_get_holdicons(u16 **p, u16 *xpos, u16 *ypos, u16 *size) {
 }
 
 u16 * skin_get_unknownicon(void) {
-	u16 *p, *s;
+	u16 *p = NULL;
 	char *buffer;
 	unzFile uf = NULL;
 	int err = UNZ_OK;
@@ -648,9 +649,9 @@ u16 * skin_get_unknownicon(void) {
 
 	uf = unzOpen(currentskin.file);
 	if(uf == NULL)
-		return;
+		return NULL;
 	if(unzLocateFile(uf, currentskin.unknownicon, 0) != UNZ_OK)
-		return;
+		return NULL;
 	err = unzOpenCurrentFile(uf);
 
 	buffer = (char *) malloc(131072);
@@ -769,7 +770,7 @@ void skin_get_volumeicons(u16 **p, u16 *xpos, u16 *ypos, u16 *size) {
 }
 
 u16 *skin_get_selected(void) {
-	u16 *p, *s;
+	u16 *p = NULL;
 	char *buffer;
 	unzFile uf = NULL;
 	int err = UNZ_OK;
@@ -779,9 +780,9 @@ u16 *skin_get_selected(void) {
 
 	uf = unzOpen(currentskin.file);
 	if(uf == NULL)
-		return;
+		return NULL;
 	if(unzLocateFile(uf, currentskin.selected, 0) != UNZ_OK)
-		return;
+		return NULL;
 	err = unzOpenCurrentFile(uf);
 
 	buffer = (char *) malloc(131072);

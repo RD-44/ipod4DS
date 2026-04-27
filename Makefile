@@ -27,22 +27,17 @@ $(TARGET).ds.gba	: $(TARGET).nds
 
 #---------------------------------------------------------------------------------
 $(TARGET).nds	:	$(TARGET).arm7 $(TARGET).arm9
-	ndstool	-c $(TARGET).nds -7 $(TARGET).arm7 -9 $(TARGET).arm9
+	$(OBJCOPY) --remove-section=.twl --remove-section=.twl_bss \
+		arm7/$(TARGET).arm7.elf $(TARGET).arm7.pack.elf
+	$(OBJCOPY) --remove-section=.twl --remove-section=.twl_bss \
+		arm9/$(TARGET).arm9.elf $(TARGET).arm9.pack.elf
+	ndstool	-c $(TARGET).nds -7 $(TARGET).arm7.pack.elf -9 $(TARGET).arm9.pack.elf
 
 #---------------------------------------------------------------------------------
-$(TARGET).arm7	: arm7/$(TARGET).elf
-$(TARGET).arm9	: arm9/$(TARGET).elf
-
-#---------------------------------------------------------------------------------
-arm7/$(TARGET).elf:
+$(TARGET).arm7:
 	$(MAKE) -C arm7
-	
-#---------------------------------------------------------------------------------
-arm9/$(TARGET).elf:
+
+$(TARGET).arm9:
 	$(MAKE) -C arm9
 
-#---------------------------------------------------------------------------------
-clean:
-	$(MAKE) -C arm9 clean
-	$(MAKE) -C arm7 clean
-	rm -f $(TARGET).ds.gba $(TARGET).nds $(TARGET).arm7 $(TARGET).arm9
+#---------------------------------------

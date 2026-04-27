@@ -1,0 +1,23 @@
+.toolchains/
+.vscode/
+melonds-sdroot/
+
+# Generated ROMs and binaries
+*.nds
+*.ds.gba
+*.arm7
+*.arm9
+*.pack.elf
+
+# Build output
+arm7/build/
+arm9/build/
+*.elf
+*.map
+
+# Local desktop clutter
+.DS_Store
+
+# melonDS DLDI image files
+dldi.img
+dldi.img.idx

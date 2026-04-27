@@ -49,12 +49,14 @@ extern
 u32 sound_elapsed, sound_time;
 
 void sound_start(FILE *fp_arg, enum format format_arg);
+void sound_setup(struct media *m);
 void sound_stop(void);
 void sound_rewind(void);
 void sound_forward(void);
 void sound_finishing(void);
 void sound_playpause(void);
 void sound_init(void);
+void sound_update(void);
 u32 sound_position(void);
 u32 sound_size(void);
 void sound_flush(void);

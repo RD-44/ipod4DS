@@ -108,7 +108,7 @@ DEPENDS	:=	$(OFILES:.o=.d)
 # main targets
 #---------------------------------------------------------------------------------
 $(ARM7BIN)	:	$(ARM7ELF)
-	@$(OBJCOPY) -O binary $< $@
+	@$(OBJCOPY) -O binary -R .twl -R .twl_bss $< $@
 	@echo built ... $(notdir $@)
 
 

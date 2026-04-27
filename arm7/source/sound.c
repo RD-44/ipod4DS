@@ -19,10 +19,11 @@ static s16 llast, rlast;
 static s16 *table;
 
 void InitSoundDevice(void) {
-	u8 control;
-
-	powerON(POWER_SOUND);
-	SOUND_CR = SOUND_ENABLE | SOUND_VOL(0x7F);
+	powerOn(POWER_SOUND);
+	writePowerManagement(PM_CONTROL_REG, (readPowerManagement(PM_CONTROL_REG) & ~PM_SOUND_MUTE) | PM_SOUND_AMP);
+	REG_SOUNDCNT = SOUND_ENABLE;
+	REG_MASTER_VOLUME = 127;
+	IPC2->sound_state = IPC2_STOPPED;
 }
 
 // static s16 InterruptHandler_TIMER1_Volume_calculate16(s16 sample) {
@@ -36,7 +37,7 @@ static s8 InterruptHandler_TIMER1_Volume_calculate8(s8 sample) {
 
 	/* 8 bit gets the poor sound amplifier */
 
-	(s8) MIN(MAX((((s32) sample * (s32) volume) / (s32) 0x3fff), -128), 127);
+	return (s8) MIN(MAX((((s32) sample * (s32) volume) / (s32) 0x3fff), -128), 127);
 }
 
 static s16 InterruptHandler_TIMER1_Volume_calculate16(s16 sample) {
@@ -56,7 +57,7 @@ static void InterruptHandler_TIMER1_Volume(char *left, char *right) {
 	int i;
 	s8 *t8;
 	s16 *t16;
-	u16 lastvol;
+	static u16 lastvol = 0xffff;
 
 	if(bytes_per_sample == 2 && lastvol != IPC2->sound_volume) {
 		if(IPC2->sound_volume <= 0x3fff) {
@@ -64,12 +65,12 @@ static void InterruptHandler_TIMER1_Volume(char *left, char *right) {
 
 			newvol = (0x7f * IPC2->sound_volume) / 0x3fff;
 
-			SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(newvol) | SOUND_PAN(0x0) | SOUND_16BIT;
-			SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(newvol) | SOUND_PAN(0x7f) | SOUND_16BIT;
+				SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(newvol) | SOUND_PAN(0x0) | SOUND_FORMAT_16BIT;
+				SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(newvol) | SOUND_PAN(0x7f) | SOUND_FORMAT_16BIT;
 		} else {
 			if(lastvol < 0x3fff) {
-				SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7f) | SOUND_PAN(0x0) | SOUND_16BIT;
-				SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7f) | SOUND_PAN(0x7f) | SOUND_16BIT;
+					SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7f) | SOUND_PAN(0x0) | SOUND_FORMAT_16BIT;
+					SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7f) | SOUND_PAN(0x7f) | SOUND_FORMAT_16BIT;
 			}
 
 			table = IPC2->sound_tables[((IPC2->sound_volume >> 8) - 64)];
@@ -223,7 +224,7 @@ static void InterruptHandler_TIMER1_OverSampling16(s16 *lbuf, s16 *rbuf) {
 void InterruptHandler_TIMER1(void) {
 	if(IPC2->sound_writerequest == 1) {
 		if(IPC2->messageflag2 < IPC2_MAX_MESSAGES)
-			strcpy(IPC2->message2[IPC2->messageflag2], "error: buffer underrun");
+				strcpy((char *)IPC2->message2[IPC2->messageflag2], "error: buffer underrun");
 		IPC2->messageflag2++;
 
 		memset(&pcmL[(multiple - 1) * samples * bytes_per_sample + buffer * multiple * samples * bytes_per_sample], 0, samples * bytes_per_sample);
@@ -297,24 +298,20 @@ void pcmplay(void) {
 	IPC2->sound_writerequest = 1;
 	IPC_SendSync(IPC2_REQUEST_WRITE_SOUND);
 	while(IPC2->sound_writerequest == 1);
-	swiWaitForVBlank();
 	InterruptHandler_TIMER1();
 	while(IPC2->sound_writerequest == 1);
-	swiWaitForVBlank();
 	InterruptHandler_TIMER1();
 	while(IPC2->sound_writerequest == 1);
-	swiWaitForVBlank();
 
-	irqEnable(IRQ_TIMER1);
-	swiIntrWait(1, IRQ_TIMER1);
 	irqSet(IRQ_TIMER1, InterruptHandler_TIMER1);
+	irqEnable(IRQ_TIMER1);
 
 	SCHANNEL_CR(0) = 0;
 	SCHANNEL_SOURCE(0) = (u32) pcmL;
 	SCHANNEL_CR(1) = 0;
 	SCHANNEL_SOURCE(1) = (u32) ((channels == 2) ? pcmR : pcmL);
-	SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7F) | SOUND_PAN(0x0) | ((bytes_per_sample == 2) ? SOUND_16BIT : SOUND_8BIT);
-	SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7F) | SOUND_PAN(0x7F) | ((bytes_per_sample == 2) ? SOUND_16BIT : SOUND_8BIT);
+	SCHANNEL_CR(0) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7F) | SOUND_PAN(0x0) | ((bytes_per_sample == 2) ? SOUND_FORMAT_16BIT : SOUND_FORMAT_8BIT);
+	SCHANNEL_CR(1) = SCHANNEL_ENABLE | SOUND_REPEAT | SOUND_VOL(0x7F) | SOUND_PAN(0x7F) | ((bytes_per_sample == 2) ? SOUND_FORMAT_16BIT : SOUND_FORMAT_8BIT);
 
 	IPC2->sound_state = IPC2_PLAYING;
 }
@@ -343,5 +340,5 @@ void playclick(void) {
 
 	SCHANNEL_CR(2) = 0;
 	SCHANNEL_SOURCE(2) = (u32) click_raw;
-	SCHANNEL_CR(2) = SCHANNEL_ENABLE | SOUND_ONE_SHOT | SOUND_VOL(0x7F) | SOUND_PAN(0x40) | SOUND_16BIT;
+	SCHANNEL_CR(2) = SCHANNEL_ENABLE | SOUND_ONE_SHOT | SOUND_VOL(0x7F) | SOUND_PAN(0x40) | SOUND_FORMAT_16BIT;
 }

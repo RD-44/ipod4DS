@@ -24,7 +24,7 @@ DATA		:= data
 #---------------------------------------------------------------------------------
 ARCH	:=	-mthumb-interwork
 
-CFLAGS	:=	-Werror -O3 -s \
+CFLAGS	:=	-Werror -Wno-error=old-style-definition -Wno-error=incompatible-pointer-types -O3 -s \
  			-march=armv5te -mtune=arm946e-s -fomit-frame-pointer\
 			-ffast-math \
 			$(ARCH)
@@ -34,12 +34,12 @@ CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:= $(ARCH) -march=armv5te -mtune=arm946e-s
 
-LDFLAGS	=	-specs=ds_arm9.specs $(ARCH) -mno-fpu -Wl,-Map,$(notdir $*.map)
+LDFLAGS	=	-specs=ds_arm9.specs $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 #---------------------------------------------------------------------------------
 # any extra libraries we wish to link with the project
 #---------------------------------------------------------------------------------
-LIBS	:= -lid3tag -lz -lvorbisidec -lFLAC -lmad -lm -lfat -lnds9
+LIBS	:= -lid3tag -lz -lvorbisidec -lFLAC -lmad -logg -lm -lfat -lnds9
  
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -114,7 +114,7 @@ DEPENDS	:=	$(OFILES:.o=.d)
 # main targets
 #---------------------------------------------------------------------------------
 $(ARM9BIN)	:	$(ARM9ELF)
-	@$(OBJCOPY) -O binary $< $@
+	@$(OBJCOPY) -O binary -R .twl -R .twl_bss $< $@
 	@echo built ... $(notdir $@)
 
 $(ARM9ELF)	:	$(OFILES)

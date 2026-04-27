@@ -1,4 +1,5 @@
 void madplay_stop(void);
+void madplay_update(void);
 int madplay(struct media *m);
 u32 madplay_size(void);
 u32 madplay_position(void);

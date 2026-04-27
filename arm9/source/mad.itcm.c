@@ -33,25 +33,54 @@ static struct mad_frame Frame;
 static struct mad_synth Synth;
 //static mad_timer_t Timer;
 static unsigned char *InputBuffer, *GuardPtr;
+static int mad_initialized;
 // static unsigned FrameCount;
 static u32 mad_size;
+static u32 mad_samples_written;
+static u32 mad_time_estimate;
 
 static char *buffer;
 static u32 buflen = 0;
 
 u32 madplay_position(void);
 
-void madplay_stop(void) {
-	mad_synth_finish(&Synth);
-	mad_frame_finish(&Frame);
-	mad_stream_finish(&Stream);
+static void madplay_update_time(void) {
+	u32 played_samples = 0;
 
-	fclose(sound_playfile);
+	if(sound_samplerate == 0) {
+		sound_elapsed = 0;
+		return;
+	}
+
+	if(mad_samples_written > (u32)buffer_samples)
+		played_samples = mad_samples_written - buffer_samples;
+
+	sound_elapsed = played_samples / sound_samplerate;
+	sound_time = mad_time_estimate;
+}
+
+void madplay_stop(void) {
+	if(mad_initialized) {
+		mad_synth_finish(&Synth);
+		mad_frame_finish(&Frame);
+		mad_stream_finish(&Stream);
+		mad_initialized = 0;
+	}
+
+	if(sound_playfile != NULL) {
+		fclose(sound_playfile);
+		sound_playfile = NULL;
+	}
 
 	free(readbufL);
+	readbufL = NULL;
 	free(readbufR);
+	readbufR = NULL;
 	free(buffer);
+	buffer = NULL;
 	free(InputBuffer);
+	InputBuffer = NULL;
+	GuardPtr = NULL;
 }
 
 static s16 madplay_fixedtos16(mad_fixed_t sample) {
@@ -80,7 +109,7 @@ static int madplay_read(void *ptr, u32 size) {
 		buflen = 0;
 	} else {
 		memcpy(ptr, buffer, size);
-		memmove(buffer, buffer + size, FILE_BUFFER_SIZE - size);
+		memmove(buffer, buffer + size, buflen - size);
 		read = size;
 		buflen -= size;
 	}
@@ -106,7 +135,7 @@ static int madplay_decode(void) {
 		return 0;
 
 	if(Stream.buffer == NULL || Stream.error == MAD_ERROR_BUFLEN) {
-		size_t ReadSize, Remaining;
+		size_t ReadSize, Remaining, bytes_read;
 		unsigned char *ReadStart;
 
 		if(Stream.next_frame != NULL) {
@@ -120,7 +149,15 @@ static int madplay_decode(void) {
 			Remaining = 0;
 		}
 
-		madplay_read(ReadStart, ReadSize);
+		bytes_read = madplay_read(ReadStart, ReadSize);
+		ReadSize = bytes_read;
+		GuardPtr = NULL;
+
+		if(ReadSize == 0 && Remaining == 0) {
+			state = FINISHING;
+			return 0;
+		}
+
 		if(madplay_eof()) {
 			GuardPtr = ReadStart + ReadSize;
 			memset(GuardPtr, 0, MAD_BUFFER_GUARD);
@@ -137,7 +174,7 @@ static int madplay_decode(void) {
 		if(MAD_RECOVERABLE(Stream.error)) {
 			if(Stream.error != MAD_ERROR_LOSTSYNC || Stream.this_frame != GuardPtr) {
 				if(IPC2->messageflag < IPC2_MAX_MESSAGES)
-					sprintf(IPC2->message[IPC2->messageflag++], "recoverable frame level error (%s)\n", mad_stream_errorstr(&Stream));
+					sprintf((char *)IPC2->message[IPC2->messageflag++], "recoverable frame level error (%s)\n", mad_stream_errorstr(&Stream));
 			}
 			return 1;
 		} else {
@@ -145,7 +182,7 @@ static int madplay_decode(void) {
 				return 1;
 			else {
 				if(IPC2->messageflag < IPC2_MAX_MESSAGES)
-					sprintf(IPC2->message[IPC2->messageflag++], "unrecoverable frame level error (%s).\n", mad_stream_errorstr(&Stream));
+					sprintf((char *)IPC2->message[IPC2->messageflag++], "unrecoverable frame level error (%s).\n", mad_stream_errorstr(&Stream));
 
 				return -1;
 			}
@@ -193,8 +230,8 @@ void madplay_update(void) {
 			lastpos = 0;
 			sound_channels = MAD_NCHANNELS(&Frame.header);
 			sound_samplerate =  Frame.header.samplerate;
-			sound_elapsed = madplay_position() / (Frame.header.bitrate / 8);
-			sound_time = mad_size / (Frame.header.bitrate / 8);
+			if(mad_time_estimate == 0 && Frame.header.bitrate > 0)
+				mad_time_estimate = mad_size / (Frame.header.bitrate / 8);
 		}
 
 		src16L = ((s16 *) readbufL) + lastpos;
@@ -219,31 +256,57 @@ void madplay_update(void) {
 		buffer_end += size;
 		buffer_end %= buffer_size;
 		buffer_samples += size;
+		mad_samples_written += size;
+		madplay_update_time();
 
 		REG_IME = oldval;
 	}
+
+	madplay_update_time();
 }
 
 int madplay(struct media *m) {
 	struct stat s;
+
+	readbufL = NULL;
+	readbufR = NULL;
+	buffer = NULL;
+	InputBuffer = NULL;
+	GuardPtr = NULL;
+	sound_playfile = NULL;
+	mad_initialized = 0;
 
 	readbufL = (s16 *) malloc(MAD_DECODED_BUFFER_SIZE * 2);
 	readbufR = (s16 *) malloc(MAD_DECODED_BUFFER_SIZE * 2);
 	buffer = (char *) malloc(FILE_BUFFER_SIZE);
 
 	InputBuffer = (char *) malloc(INPUT_BUFFER_SIZE + MAD_BUFFER_GUARD);
+	if(readbufL == NULL || readbufR == NULL || buffer == NULL || InputBuffer == NULL) {
+		state = ERROR;
+		madplay_stop();
+		return 1;
+	}
+
 	stat(m->path, &s);
 	mad_size = s.st_size;
 
-	sound_playfile = fopen(m->path, "r");
+	sound_playfile = fopen(m->path, "rb");
+	if(sound_playfile == NULL) {
+		state = ERROR;
+		madplay_stop();
+		return 1;
+	}
 
 	mad_stream_init(&Stream);
 	mad_frame_init(&Frame);
 	mad_synth_init(&Synth);
+	mad_initialized = 1;
 //	mad_timer_reset(&Timer);
 
 	buflen = 0;
 	lastbuf = lastpos = 0;
+	mad_samples_written = 0;
+	mad_time_estimate = 0;
 //	FrameCount = 0;
 
 	madplay_update();
@@ -265,6 +328,8 @@ void madplay_flush(void) {
 
 	buflen = 0;
 	lastbuf = lastpos = 0;
+	mad_samples_written = 0;
+	mad_time_estimate = sound_time;
 }
 
 u32 madplay_position(void) {
@@ -277,4 +342,5 @@ u32 madplay_size(void) {
 
 void madplay_seek(u32 pos) {
 	fseek(sound_playfile, pos, SEEK_SET);
+	mad_samples_written = 0;
 }

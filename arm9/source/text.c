@@ -4,7 +4,7 @@
 
 #define RGBToGreyScale(x) ((((x&0x03E0)>>5)+((x&0x7C00)>>10)+((x&0x001F)))/3)
 
-u16 getStringWidth(const char *s, uint16 **f) {
+u16 getStringWidth(const char *s, u16 **f) {
 	u16 i;
 	u16 w, max;
 	u32 len;
@@ -32,11 +32,11 @@ u16 getStringWidth(const char *s, uint16 **f) {
 	return max;
 }
 
-u16 getStringHeight(const char *s, uint16 **f) {
+u16 getStringHeight(const char *s, u16 **f) {
 	return f[0][1];
 }
 
-static void dispChar(s16 x_offset, s16 y_offset, u16 mask, unsigned char c, u16 *buffer, uint16 **font, u16 surface_width) {
+static void dispChar(s16 x_offset, s16 y_offset, u16 mask, unsigned char c, u16 *buffer, u16 **font, u16 surface_width) {
 	int w, h;
 	int i, j;
 	u16 color;
@@ -77,7 +77,7 @@ static void dispChar(s16 x_offset, s16 y_offset, u16 mask, unsigned char c, u16 
 	}
 }
 
-void dispString(s16 x_offset, s16 y_offset, u16 mask, const char *text, u16 *buffer, uint16 **font, u16 width, u16 height, u16 surface_width) {
+void dispString(s16 x_offset, s16 y_offset, u16 mask, const char *text, u16 *buffer, u16 **font, u16 width, u16 height, u16 surface_width) {
 	u32 i;
 	u32 len;
 	u16 x_pos;
@@ -101,7 +101,7 @@ void dispString(s16 x_offset, s16 y_offset, u16 mask, const char *text, u16 *buf
 	}
 }
 
-void dispString2(s16 x_offset, s16 y_offset, u16 mask, const char *text, u16 *buffer, uint16 **font, u16 width, u16 height, u16 surface_width) {
+void dispString2(s16 x_offset, s16 y_offset, u16 mask, const char *text, u16 *buffer, u16 **font, u16 width, u16 height, u16 surface_width) {
 	u32 i;
 	u32 len;
 	u16 x_pos;

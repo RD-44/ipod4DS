@@ -4,6 +4,7 @@
 
 #include <sys/dir.h>
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,8 +17,10 @@
 #include "file.h"
 
 #include "heap.h"
+#include "playlist.h"
 
 #define BLOCK 1
+#define SCAN_QUEUE_BLOCK 32
 
 static struct media *freelist;
 struct media *media;
@@ -28,6 +31,43 @@ static void wait(void) {
 
 	for(i=0; i<60; i++)
 		swiWaitForVBlank();
+}
+
+static void scan_malloc_failed(const char *where) {
+	printf("%s: malloc failed!\n", where);
+	while(1)
+		swiWaitForVBlank();
+}
+
+static int scan_should_skip(const char *filename) {
+	if(strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+		return 1;
+
+	if(filename[0] == '.')
+		return 1;
+
+	if(strcasecmp(filename, "moonshl") == 0)
+		return 1;
+
+	return 0;
+}
+
+static void scan_queue_push(char ***queue, unsigned *qcapacity, unsigned *qend, const char *path, const char *where) {
+	char **newqueue;
+
+	if(*qend >= *qcapacity) {
+		*qcapacity += SCAN_QUEUE_BLOCK;
+		newqueue = (char **) realloc(*queue, *qcapacity * sizeof(char *));
+		if(newqueue == NULL)
+			scan_malloc_failed(where);
+		*queue = newqueue;
+	}
+
+	(*queue)[*qend] = strdup(path);
+	if((*queue)[*qend] == NULL)
+		scan_malloc_failed(where);
+
+	(*qend)++;
 }
 
 struct media *media_alloc(void) {
@@ -138,53 +178,45 @@ static int heap_cmp(const void *e1, const void *e2) {
 }
 
 int file_scan(char *path) {
-	DIR_ITER *d;
+	DIR *d;
+	struct dirent *entry;
 	struct stat s;
 	char filename[256];
-	char *queue[1024];
-	unsigned qinit, qend;
+	char fullpath[1024];
+	char **queue;
+	unsigned qcapacity, qinit, qend;
 
-	int i;
+	qcapacity = SCAN_QUEUE_BLOCK;
+	queue = (char **) malloc(qcapacity * sizeof(char *));
+	if(queue == NULL)
+		scan_malloc_failed("file_scan");
 
 	qinit = qend = 0;
-	queue[qend] = strdup(path);;
-
-	if(queue[qend] == NULL) {
-		printf("file_scan: malloc failed!\n");
-		while(1)
-			swiWaitForVBlank();
-	}
-
-	qend++;
+	scan_queue_push(&queue, &qcapacity, &qend, path, "file_scan");
 
 	while(qinit < qend) {
-
-		d = diropen(queue[qinit]);
+		d = opendir(queue[qinit]);
 		if(d == NULL) {
+			free(queue);
 			return 1;
 		}
 
-		while(dirnext(d, filename, &s) != -1) {
-			if(strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+		while((entry = readdir(d)) != NULL) {
+			strcpy(filename, entry->d_name);
+
+			if(scan_should_skip(filename))
 				continue;
-			// HACK
-			if(strcasecmp(filename, "moonshl") == 0)
+
+			strcpy(fullpath, queue[qinit]);
+			if(fullpath[strlen(fullpath) - 1] != '/')
+				strcat(fullpath, "/");
+			strcat(fullpath, filename);
+
+			if(stat(fullpath, &s) == -1)
 				continue;
 
 			if(S_ISDIR(s.st_mode)) {
-				int plen = strlen(queue[qinit]);
-
-				queue[qend] = (char *) malloc(plen + strlen(filename) + 2);
-				if(queue[qend] == NULL) {
-					printf("file_scan: malloc failed!\n");
-					while(1)
-						swiWaitForVBlank();
-				}
-				strcpy(queue[qend], queue[qinit]);
-				if(queue[qinit][plen-1] != '/')
-					strcat(queue[qend], "/");
-				strcat(queue[qend], filename);
-				qend++;
+				scan_queue_push(&queue, &qcapacity, &qend, fullpath, "file_scan");
 			} else if(S_ISREG(s.st_mode)) {
 				enum format type;
 
@@ -194,13 +226,17 @@ int file_scan(char *path) {
 			}
 		}
 
-		if(dirclose(d) == -1)
+		if(closedir(d) == -1) {
+			free(queue[qinit]);
+			free(queue);
 			return 1;
+		}
 
 		free(queue[qinit]);
 		qinit++;
 	}
 
+	free(queue);
 	return 0;
 }
 
@@ -217,49 +253,46 @@ static int verify_playlist(char *path, char *filename) {
 }
 
 int file_scan_playlists(char *path) {
-	DIR_ITER *d;
+	DIR *d;
+	struct dirent *entry;
 	struct stat s;
 	char filename[256];
-	char *queue[1024], qinit, qend;
-	int i;
+	char fullpath[1024];
+	char **queue;
+	unsigned qcapacity, qinit, qend;
+
+	qcapacity = SCAN_QUEUE_BLOCK;
+	queue = (char **) malloc(qcapacity * sizeof(char *));
+	if(queue == NULL)
+		scan_malloc_failed("file_scan_playlists");
 
 	qinit = qend = 0;
-	queue[qend] = strdup(path);
-
-	if(queue[qend] == NULL) {
-		printf("file_scan_playlists: malloc failed!\n");
-		while(1)
-			swiWaitForVBlank();
-	}
-
-	qend++;
+	scan_queue_push(&queue, &qcapacity, &qend, path, "file_scan_playlists");
 
 	while(qinit < qend) {
-		d = diropen(queue[qinit]);
+		d = opendir(queue[qinit]);
 
-		if(d == NULL)
+		if(d == NULL) {
+			free(queue);
 			return 1;
+		}
 
-		while(dirnext(d, filename, &s) != -1) {
+		while((entry = readdir(d)) != NULL) {
+			strcpy(filename, entry->d_name);
 
-			if(strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+			if(scan_should_skip(filename))
+				continue;
+
+			strcpy(fullpath, queue[qinit]);
+			if(fullpath[strlen(fullpath) - 1] != '/')
+				strcat(fullpath, "/");
+			strcat(fullpath, filename);
+
+			if(stat(fullpath, &s) == -1)
 				continue;
 
 			if(S_ISDIR(s.st_mode)) {
-				int plen = strlen(queue[qinit]);
-
-				queue[qend] = (char *) malloc(plen + strlen(filename) + 2);
-				if(queue[qend] == NULL) {
-					printf("file_scan_playlists: malloc failed!\n");
-					while(1)
-						swiWaitForVBlank();
-				}
-
-				strcpy(queue[qend], queue[qinit]);
-				if(queue[qinit][plen-1] != '/')
-					strcat(queue[qend], "/");
-				strcat(queue[qend], filename);
-				qend++;
+				scan_queue_push(&queue, &qcapacity, &qend, fullpath, "file_scan_playlists");
 			} else if(S_ISREG(s.st_mode)) {
 				if((verify_playlist(queue[qinit], filename)) == 1) {
 					playlist_add(playlist_process(queue[qinit], filename));
@@ -267,13 +300,17 @@ int file_scan_playlists(char *path) {
 			}
 		}
 
-		if(dirclose(d) == -1)
+		if(closedir(d) == -1) {
+			free(queue[qinit]);
+			free(queue);
 			return 1;
+		}
 
 		free(queue[qinit]);
 		qinit++;
 	}
 
+	free(queue);
 	return 0;
 }
 

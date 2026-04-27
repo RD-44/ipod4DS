@@ -23,7 +23,7 @@ void input_playlists(int, const char *);
 void input_songs_setup(int, const char *);
 void input_playlist_setup(int, const char *);
 void input_playlists_setup(int, const char *);
-void input_sound_finished();
+void input_sound_finished(void);
 void input_shuffle_setup(int pos, const char *text);
 void input_tags_scan(int pos, const char *text);
 void input_settings_setup(int pos, const char *text);
@@ -98,9 +98,11 @@ int nowplaying_delay;
 #ifdef INPUT_C
 static struct input_handle menu_input[] = {
 	{ WHEEL, WHEEL_RIGHT, menu_down },
+	{ WHEEL, WHEEL_FORWARD, menu_down },
 	{ KEY_PRESS, KEY_DOWN, menu_down },
 	{ KEY_HELD, KEY_R, menu_down },
 	{ WHEEL, WHEEL_LEFT, menu_up },
+	{ WHEEL, WHEEL_REWIND, menu_up },
 	{ KEY_PRESS, KEY_UP, menu_up },
 	{ KEY_HELD, KEY_L, menu_up },
 	{ WHEEL, WHEEL_CENTER, menu_center },
@@ -150,9 +152,11 @@ static struct input_handle music_input[] = {
 	{ KEY_PRESS, KEY_LEFT, music_back },
 	{ KEY_PRESS, KEY_X, music_back },
 	{ WHEEL, WHEEL_RIGHT, music_down },
+	{ WHEEL, WHEEL_FORWARD, music_down },
 	{ KEY_PRESS, KEY_DOWN, music_down },
 	{ KEY_HELD, KEY_R, music_down },
 	{ WHEEL, WHEEL_LEFT, music_up },
+	{ WHEEL, WHEEL_REWIND, music_up },
 	{ KEY_PRESS, KEY_UP, music_up},
 	{ KEY_HELD, KEY_L, music_up},
 	{ WHEEL, WHEEL_CENTER, music_center },
@@ -170,9 +174,11 @@ static struct input_handle playlist_input[] = {
 	{ KEY_PRESS, KEY_LEFT, playlist_back },
 	{ KEY_PRESS, KEY_X, playlist_back },
 	{ WHEEL, WHEEL_RIGHT, playlist_down },
+	{ WHEEL, WHEEL_FORWARD, playlist_down },
 	{ KEY_PRESS, KEY_DOWN, playlist_down },
 	{ KEY_HELD, KEY_R, playlist_down },
 	{ WHEEL, WHEEL_LEFT, playlist_up },
+	{ WHEEL, WHEEL_REWIND, playlist_up },
 	{ KEY_PRESS, KEY_UP, playlist_up },
 	{ KEY_HELD, KEY_L, playlist_up },
 	{ WHEEL, WHEEL_CENTER, playlist_center },
@@ -190,9 +196,11 @@ static struct input_handle playlists_input[] = {
 	{ KEY_PRESS, KEY_LEFT, playlists_back },
 	{ KEY_PRESS, KEY_X, playlists_back },
 	{ WHEEL, WHEEL_RIGHT, playlists_down },
+	{ WHEEL, WHEEL_FORWARD, playlists_down },
 	{ KEY_PRESS, KEY_DOWN, playlists_down },
 	{ KEY_HELD, KEY_R, playlists_down },
 	{ WHEEL, WHEEL_LEFT, playlists_up },
+	{ WHEEL, WHEEL_REWIND, playlists_up },
 	{ KEY_PRESS, KEY_UP, playlists_up},
 	{ KEY_HELD, KEY_L, playlists_up },
 	{ WHEEL, WHEEL_CENTER, playlists_center },
@@ -210,9 +218,11 @@ static struct input_handle settings_input[] = {
 	{ KEY_PRESS, KEY_LEFT, settings_back },
 	{ KEY_PRESS, KEY_X, settings_back },
 	{ WHEEL, WHEEL_RIGHT, settings_down },
+	{ WHEEL, WHEEL_FORWARD, settings_down },
 	{ KEY_PRESS, KEY_DOWN, settings_down },
 	{ KEY_HELD, KEY_R, settings_down },
 	{ WHEEL, WHEEL_LEFT, settings_up },
+	{ WHEEL, WHEEL_REWIND, settings_up },
 	{ KEY_PRESS, KEY_UP, settings_up},
 	{ KEY_HELD, KEY_L, settings_up},
 	{ WHEEL, WHEEL_CENTER, settings_center },
@@ -230,9 +240,11 @@ static struct input_handle skins_input[] = {
 	{ KEY_PRESS, KEY_LEFT, skins_back },
 	{ KEY_PRESS, KEY_X, skins_back },
 	{ WHEEL, WHEEL_RIGHT, skins_down },
+	{ WHEEL, WHEEL_FORWARD, skins_down },
 	{ KEY_PRESS, KEY_DOWN, skins_down },
 	{ KEY_HELD, KEY_R, skins_down },
 	{ WHEEL, WHEEL_LEFT, skins_up },
+	{ WHEEL, WHEEL_REWIND, skins_up },
 	{ KEY_PRESS, KEY_UP, skins_up},
 	{ KEY_HELD, KEY_L, skins_up},
 	{ WHEEL, WHEEL_CENTER, skins_center },

@@ -39,6 +39,48 @@
 
 #include <nds/ipc.h>
 
+#define IPC_BASE_ADDR 0x02FFF000
+
+#ifndef IPC
+typedef struct {
+	union {
+		struct {
+			u8 unused;
+			struct {
+				u8 year;
+				u8 month;
+				u8 day;
+				u8 weekday;
+				u8 hours;
+				u8 minutes;
+				u8 seconds;
+			} rtc;
+		};
+		u8 curtime[8];
+	};
+} TransferTimeCompat;
+
+typedef struct {
+	vs16 touchX;
+	vs16 touchY;
+	vs16 touchXpx;
+	vs16 touchYpx;
+	vs16 touchZ1;
+	vs16 touchZ2;
+	vu16 buttons;
+	vu16 _padding;
+	u32 unixTime;
+	u32 bootcode;
+	vu16 battery;
+	vu16 aux;
+	vu16 mailBusy;
+	vu16 _padding2;
+	TransferTimeCompat time;
+} TransferRegion;
+
+#define IPC ((TransferRegion volatile *)IPC_BASE_ADDR)
+#endif
+
 typedef struct sTransferRegion2 {
 	void *sound_lbuf, *sound_rbuf;
 
@@ -64,9 +106,21 @@ typedef struct sTransferRegion2 {
 	s16 **sound_tables;
 
 	u8 sound_arm7_mode;
+	u8 arm7_stage;
+	u16 arm7_last_keyxy;
+	u32 arm7_main_loops;
+	u32 arm7_vblanks;
+	u16 arm7_touch_rawx;
+	u16 arm7_touch_rawy;
+	u16 arm7_touch_px;
+	u16 arm7_touch_py;
+	u16 arm7_touch_z1;
+	u16 arm7_touch_z2;
+	u16 arm7_touch_pen;
+	u16 arm7_touch_valid;
 } TransferRegion2, * pTransferRegion2;
 
 
-#define IPC2 ((TransferRegion2 volatile *)(0x027FF000+sizeof(TransferRegion)))
+#define IPC2 ((TransferRegion2 volatile *)(IPC_BASE_ADDR + sizeof(TransferRegion)))
 
 #endif

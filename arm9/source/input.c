@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <ipc2.h>
 
@@ -16,6 +17,7 @@
 #include "file.h"
 #include "sound.h"
 #include "playlist.h"
+#include "tags.h"
 
 static enum screen_menu nowplaying_last_menu;
 static u32 nowplaying_last_selected;
@@ -28,6 +30,145 @@ static u32 settings_last_selected;
 static u32 skins_last_selected;
 
 static u8 input_abort;
+
+#define TOUCH_CENTER_X 128
+#define TOUCH_CENTER_Y 96
+#define TOUCH_PEN_DOWN BIT(6)
+#define TOUCH_INNER_RADIUS 24
+#define TOUCH_OUTER_RADIUS 76
+#define TOUCH_CENTER_RADIUS 40
+#define TOUCH_BUTTON_RADIUS 40
+#define TOUCH_MENU_X 0
+#define TOUCH_MENU_Y -54
+#define TOUCH_FORWARD_X 56
+#define TOUCH_FORWARD_Y 0
+#define TOUCH_REWIND_X -56
+#define TOUCH_REWIND_Y 0
+#define TOUCH_PLAY_X 0
+#define TOUCH_PLAY_Y 56
+
+static u16 input_touch_button_status(int px, int py) {
+	int distance = px * px + py * py;
+
+	if(distance <= TOUCH_CENTER_RADIUS * TOUCH_CENTER_RADIUS)
+		return WHEEL_CENTER;
+	if(distance < TOUCH_INNER_RADIUS * TOUCH_INNER_RADIUS
+		|| distance > TOUCH_OUTER_RADIUS * TOUCH_OUTER_RADIUS)
+		return 0;
+
+	if(abs(py) > abs(px)) {
+		if(py < 0)
+			return WHEEL_MENU;
+		return WHEEL_PLAY;
+	}
+
+	if(px > 0)
+		return WHEEL_FORWARD;
+	if(px < 0)
+		return WHEEL_REWIND;
+
+	return 0;
+}
+
+static u16 input_touch_wheel_status(u32 held) {
+	static int posx, posy;
+	static int pressx, pressy;
+	static int lastpx, lastpy;
+	static int inwheel;
+	static int moved;
+	static int down;
+	int px, py;
+	int dx, dy;
+	int distance;
+	int arm7_pen_down;
+	int arm7_touch_valid;
+	int libnds_pen_down;
+	int raw_pen_down;
+	u16 wheel = 0;
+	touchPosition touch;
+
+	arm7_pen_down = (IPC2->arm7_touch_pen != 0);
+	arm7_touch_valid = (IPC2->arm7_touch_valid != 0);
+	libnds_pen_down = ((held & KEY_TOUCH) != 0);
+	raw_pen_down = ((IPC->buttons & TOUCH_PEN_DOWN) == 0);
+
+	if((arm7_pen_down && arm7_touch_valid) || libnds_pen_down || raw_pen_down) {
+		if(arm7_pen_down && arm7_touch_valid) {
+			px = IPC2->arm7_touch_px - TOUCH_CENTER_X;
+			py = IPC2->arm7_touch_py - TOUCH_CENTER_Y;
+		} else if(libnds_pen_down) {
+			touchRead(&touch);
+			px = touch.px - TOUCH_CENTER_X;
+			py = touch.py - TOUCH_CENTER_Y;
+		} else {
+			px = IPC->touchXpx - TOUCH_CENTER_X;
+			py = IPC->touchYpx - TOUCH_CENTER_Y;
+		}
+
+		if(down == 0) {
+			pressx = lastpx = posx = px;
+			pressy = lastpy = posy = py;
+
+			down = 1;
+			moved = 0;
+		}
+
+		distance = px * px + py * py;
+
+		if(distance > TOUCH_OUTER_RADIUS * TOUCH_OUTER_RADIUS
+			|| distance < TOUCH_INNER_RADIUS * TOUCH_INNER_RADIUS) {
+			inwheel = 0;
+		} else if(inwheel == 0) {
+			inwheel = 1;
+			posx = px;
+			posy = py;
+		} else {
+			float angle;
+
+			dx = px - posx;
+			dy = py - posy;
+			if(dx * dx + dy * dy < 64) {
+				lastpx = px;
+				lastpy = py;
+				return 0;
+			}
+
+			angle = atan2((float) py, (float) px) - atan2((float) posy, (float) posx);
+			if(angle > 8 * M_PI / 9)
+				angle -= 2 * M_PI;
+			if(angle < -8 * M_PI / 9)
+				angle += 2 * M_PI;
+
+			if(angle > M_PI / 9) {
+				posx = px;
+				posy = py;
+				moved = 1;
+				wheel |= WHEEL_RIGHT;
+			} else if(angle < -M_PI / 9) {
+				posx = px;
+				posy = py;
+				moved = 1;
+				wheel |= WHEEL_LEFT;
+			}
+		}
+
+		lastpx = px;
+		lastpy = py;
+		return wheel;
+	}
+
+	if(down != 0) {
+		if(!moved) {
+			if(abs(pressx - lastpx) < TOUCH_BUTTON_RADIUS && abs(pressy - lastpy) < TOUCH_BUTTON_RADIUS)
+				wheel |= input_touch_button_status((pressx + lastpx) / 2, (pressy + lastpy) / 2);
+		}
+
+		inwheel = 0;
+		down = 0;
+	}
+
+	return wheel;
+}
 
 void input_sound_finished(void) {
 	sound_finishing();
@@ -471,16 +612,16 @@ static void skins_center(void) {
 
 void input_handleinput(void) {
 	u16 wheel;
-	uint32 keys, held;
+	u32 keys, held;
 	int i;
 
 	if(input_hold == INPUT_HOLD_ALL || input_hold == INPUT_HOLD_NORMAL)
 		return;
 
-	wheel = IPC2->wheel_status;
-	IPC2->wheel_status = 0;
 	keys = keysDown();
 	held = keysHeld();
+	wheel = IPC2->wheel_status | input_touch_wheel_status(held);
+	IPC2->wheel_status = 0;
 
 	input_abort = 0;
 	for(i = 0; input_abort == 0 && currenthandle[i].type != END; i++) {
