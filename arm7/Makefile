@@ -29,7 +29,7 @@ CFLAGS	:=	-Werror -O3 -s \
 		-ffast-math \
 		$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -DARM7
+CFLAGS	+=	-DARM7
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions -fno-rtti
 
 
@@ -67,8 +67,10 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) $(SFILES:.s=.o) \
 			$(CPPFILES:.cpp=.o) $(CFILES:.c=.o)
  
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD) -I$(CURDIR)/../common/include
+				$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+				-I$(CURDIR)/$(BUILD) -I$(CURDIR)/../common/include
+
+export CPPFLAGS	+=	$(INCLUDE)
  
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 

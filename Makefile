@@ -16,7 +16,7 @@ export TOPDIR		:=	$(CURDIR)
 #---------------------------------------------------------------------------------
 export PATH		:=	$(DEVKITARM)/bin:$(PATH)
 
-.PHONY: $(TARGET).arm7 $(TARGET).arm9
+.PHONY: all clean $(TARGET).arm7 $(TARGET).arm9
 
 #---------------------------------------------------------------------------------
 # main targets
@@ -39,5 +39,13 @@ $(TARGET).arm7:
 
 $(TARGET).arm9:
 	$(MAKE) -C arm9
+
+#---------------------------------------------------------------------------------
+clean:
+	$(MAKE) -C arm7 clean
+	$(MAKE) -C arm9 clean
+	@rm -f $(TARGET).nds $(TARGET).ds.gba \
+		$(TARGET).arm7 $(TARGET).arm9 \
+		$(TARGET).arm7.pack.elf $(TARGET).arm9.pack.elf
 
 #---------------------------------------

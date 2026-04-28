@@ -29,7 +29,7 @@ CFLAGS	:=	-Werror -Wno-error=old-style-definition -Wno-error=incompatible-pointe
 			-ffast-math \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -DARM9
+CFLAGS	+=	-DARM9
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:= $(ARCH) -march=armv5te -mtune=arm946e-s
@@ -84,9 +84,11 @@ export OFILES	:=	$(addsuffix .o,$(BINFILES)) \
 					$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
  
 export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
-			$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
-			-I$(CURDIR)/$(BUILD) -I$(CURDIR)/../common/include \
-			-I$(DEVKITPRO)/libfat/include -I$(ARM9LIBS)/include
+				$(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+				-I$(CURDIR)/$(BUILD) -I$(CURDIR)/../common/include \
+				-I$(DEVKITPRO)/libfat/include -I$(ARM9LIBS)/include
+
+export CPPFLAGS	+=	$(INCLUDE)
  
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
 			-L$(DEVKITPRO)/libfat/nds/lib -L$(DEVKITPRO)/libfat/lib \

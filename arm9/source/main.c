@@ -14,42 +14,6 @@
 #include "playlist.h"
 #include "input.h"
 
-static void bootprobe_fill(u16 color) {
-	int i;
-
-	videoSetMode(MODE_5_2D | DISPLAY_BG2_ACTIVE);
-	videoSetModeSub(MODE_5_2D | DISPLAY_BG2_ACTIVE);
-	vramSetBankA(VRAM_A_MAIN_BG_0x06000000);
-	vramSetBankC(VRAM_C_SUB_BG_0x06200000);
-	REG_BG2CNT = BG_BMP16_256x256;
-	REG_BG2PA = 1 << 8;
-	REG_BG2PB = 0;
-	REG_BG2PC = 0;
-	REG_BG2PD = 1 << 8;
-	REG_BG2X = 0;
-	REG_BG2Y = 0;
-	REG_BG2CNT_SUB = BG_BMP16_256x256;
-	REG_BG2PA_SUB = 1 << 8;
-	REG_BG2PB_SUB = 0;
-	REG_BG2PC_SUB = 0;
-	REG_BG2PD_SUB = 1 << 8;
-	REG_BG2X_SUB = 0;
-	REG_BG2Y_SUB = 0;
-
-	for(i = 0; i < 256 * 192; i++)
-		((u16 *)BG_BMP_RAM(0))[i] = color | BIT(15);
-
-	for(i = 0; i < 256 * 192; i++)
-		((u16 *)BG_BMP_RAM_SUB(0))[i] = color | BIT(15);
-}
-
-static void bootprobe_wait(int frames) {
-	int i;
-
-	for(i = 0; i < frames; i++)
-		swiWaitForVBlank();
-}
-
 static void show_boot_message(const char *title, const char *body) {
 	videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE);
 	vramSetBankA(VRAM_A_MAIN_BG_0x06000000);
@@ -64,7 +28,6 @@ int main(void) {
 	int lastkeys;
 
 	powerOn(POWER_ALL_2D);
-	bootprobe_fill(RGB15(31, 0, 0));
 
 	irqInit();
 	fifoInit();
@@ -72,13 +35,7 @@ int main(void) {
 	fifoSetDatamsgHandler(FIFO_SYSTEM, systemMsgHandler, 0);
 	irqEnable(IRQ_VBLANK);
 
-	bootprobe_fill(RGB15(0, 31, 0));
-	bootprobe_wait(30);
-
-	show_boot_message("ipod4DS", "Mounting FAT filesystem...");
-
 	if(fatInitDefault() != 1) {
-		bootprobe_fill(RGB15(31, 0, 31));
 		show_boot_message(
 			"ipod4DS",
 			"FAT init failed.\n"
@@ -89,9 +46,6 @@ int main(void) {
 		while(1)
 			swiWaitForVBlank();
 	}
-
-	bootprobe_fill(RGB15(0, 0, 31));
-	bootprobe_wait(30);
 
 	screen_initdisplays();
 
